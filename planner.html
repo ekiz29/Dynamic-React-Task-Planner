@@ -1,0 +1,1090 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dinamik Yıllık Planlayıcı</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo, useEffect, useRef } = React;
+
+        // **NİHAİ DÜZELTME:** Tarih Kaymasını Önlemek İçin
+        const parseDateLocal = (dateString) => {
+            if (!dateString) return null;
+            const parts = dateString.split('-');
+            const date = new Date(parts[0], parts[1] - 1, parts[2]); 
+            date.setHours(0, 0, 0, 0); 
+            return date;
+        };
+        
+        // YARDIMCI FONKSİYON: Sadece YYYY-MM-DD dizesini alıp geri döndürür.
+        const getDateString = (dateObj) => {
+            if (!dateObj) return '';
+            const year = dateObj.getFullYear();
+            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const day = String(dateObj.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+
+
+        // Lucide Icons (Simgeler) - Kısaltıldı
+        const Calendar = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>);
+        const Plus = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>);
+        const Filter = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>);
+        const List = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>);
+        const Table = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20M19 2h1a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2h-1M5 2h-.8a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h.8M19 10H5M19 14H5"></path></svg>);
+        const ChevronLeft = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>);
+        const ChevronRight = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>);
+        const Trash2 = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>);
+        const Edit2 = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>);
+        const Check = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>);
+        const X = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>);
+        const Download = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-3-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>);
+        const CalendarPlus = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7.5"></path><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path><path d="M16 19h6"></path><path d="M19 16v6"></path></svg>);
+
+
+        // ====================================================================
+        // YARDIMCI BİLEŞENLER
+        // ====================================================================
+        
+        // TaskCard basitleştirildi. Sadece task.task görünüyor.
+        const TaskCard = ({ task, onEdit, onMouseEnter, onMouseLeave }) => {
+            const cardRef = useRef(null);
+
+            const handleMouseEnter = () => {
+                if (cardRef.current) {
+                    const rect = cardRef.current.getBoundingClientRect();
+                    onMouseEnter(task, rect);
+                }
+            };
+            
+            // task.status artık doğrudan obje içinde olmadığı için varsayılan kullanıldı.
+            const taskStatus = task.status || 'Bekliyor'; 
+
+            return (
+                <div 
+                    ref={cardRef} 
+                    className={`relative p-3 mb-2 rounded-lg border-l-4 shadow-sm cursor-pointer hover:shadow-md transition-shadow 
+                        ${taskStatus === 'Tamamlandı' ? 'bg-gray-100 border-green-500' : 'bg-white border-purple-500'}`}
+                    onClick={() => onEdit(task)}
+                    onMouseEnter={handleMouseEnter} 
+                    onMouseLeave={onMouseLeave} 
+                >
+                    <div className="flex justify-between items-start"> 
+                        <p className="text-sm font-semibold text-gray-800 break-words flex-grow">{task.task}</p>
+                    </div>
+                </div>
+            );
+        };
+        
+        // YENİ BİLEŞEN: Global Tooltip
+        const GlobalTooltip = ({ task, rect }) => {
+            if (!task || !rect) return null;
+
+            // Tooltip'i ekranın soluna mı yoksa sağına mı açacağımızı hesaplayalım.
+            const screenWidth = window.innerWidth;
+            const tooltipWidth = 256; 
+            const gap = 16; 
+
+            // Kartın sağ kenarı + boşluk + Tooltip genişliği, ekran genişliğini aşıyor mu?
+            const opensRight = (rect.right + gap + tooltipWidth) < screenWidth;
+
+            // Konum stilleri
+            const positionStyle = opensRight
+                ? {
+                      left: rect.right + gap,
+                  }
+                : {
+                      right: screenWidth - rect.left + gap,
+                  };
+            
+            // Ok (Arrow) stilleri
+            const arrowStyles = opensRight
+                ? 'absolute left-0 top-1/2 transform -translate-x-full -translate-y-1/2 w-0 h-0 border-t-[8px] border-b-[8px] border-r-[8px] border-t-transparent border-b-transparent border-r-gray-800' // Sola bakan ok
+                : 'absolute right-0 top-1/2 transform translate-x-full -translate-y-1/2 w-0 h-0 border-t-[8px] border-b-[8px] border-l-[8px] border-t-transparent border-b-transparent border-l-gray-800'; // Sağa bakan ok
+
+
+            return (
+                <div 
+                    className="fixed z-50 bg-gray-800 text-white text-sm p-3 rounded-lg shadow-xl w-64 transition-opacity duration-150"
+                    style={{
+                        ...positionStyle,
+                        // Tooltip'i kartın ortasına hizala (Y ekseni)
+                        top: rect.top + window.scrollY + rect.height / 2, 
+                        // Tooltip'i görünür kıl
+                        opacity: 1
+                    }}
+                >
+                    <h4 className="font-bold border-b border-gray-600 pb-1 mb-1">Detaylı Görev</h4>
+                    <p className="whitespace-normal break-words">{task.task}</p>
+                    {/* Ok işareti */}
+                    <div className={arrowStyles}></div>
+                </div>
+            );
+        };
+
+        const DatePickerModal = ({ selectedDate, tasks, onSelectDate, onClose, months, dayNames, isWeekend, isHoliday }) => {
+            const initialDate = selectedDate ? parseDateLocal(selectedDate) : new Date();
+            const [currentMonth, setCurrentMonth] = useState(initialDate.getMonth());
+            const [currentYear, setCurrentYear] = useState(initialDate.getFullYear()); 
+
+            const monthData = useMemo(() => {
+                const firstDayOfMonth = new Date(currentYear, currentMonth, 1);
+                // getDay() 0: Pazar, 1: Pazartesi, ..., 6: Cumartesi
+                let startDay = firstDayOfMonth.getDay(); 
+                
+                // HAFTA BAŞLANGICI DÜZELTME: Pazartesi (1) 0 olmalı.
+                // 0 (Pazar) -> 6, 1 (Pazartesi) -> 0, ..., 6 (Cumartesi) -> 5
+                startDay = (startDay === 0) ? 6 : startDay - 1; 
+
+                const lastDayOfMonth = new Date(currentYear, currentMonth + 1, 0);
+                const daysInMonth = lastDayOfMonth.getDate();
+                
+                const dailyTasks = tasks.reduce((acc, task) => {
+                    const taskDate = parseDateLocal(task.date); 
+                    if (taskDate && taskDate.getMonth() === currentMonth && taskDate.getFullYear() === currentYear) {
+                        const day = taskDate.getDate(); 
+                        acc[day] = (acc[day] || 0) + 1;
+                    }
+                    return acc;
+                }, {});
+
+                const calendarDays = [];
+                // Önceki aydan boşluklar
+                const offset = startDay; 
+                for (let i = 0; i < offset; i++) {
+                    calendarDays.push(null);
+                }
+                
+                // Ayın günleri
+                for (let i = 1; i <= daysInMonth; i++) {
+                    const dateString = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+                    calendarDays.push({
+                        day: i,
+                        count: dailyTasks[i] || 0,
+                        dateString: dateString
+                    });
+                }
+                return calendarDays;
+            }, [tasks, currentMonth, currentYear]);
+
+            const changeMonth = (delta) => {
+                let newMonth = currentMonth + delta;
+                let newYear = currentYear;
+                if (newMonth < 0) {
+                    newMonth = 11;
+                    newYear = currentYear - 1;
+                } else if (newMonth > 11) {
+                    newMonth = 0;
+                    newYear = currentYear + 1;
+                }
+                setCurrentMonth(newMonth);
+                setCurrentYear(newYear);
+            };
+
+            const isToday = (day) => {
+                const today = new Date();
+                return day && day.day === today.getDate() && currentMonth === today.getMonth() && currentYear === today.getFullYear();
+            };
+
+            const isSelected = (dateString) => {
+                return dateString === selectedDate;
+            };
+
+            // Gün isimleri dizisinin Pazartesi'den başlayanı
+            const weekDayNames = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
+
+            return (
+                <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex justify-center items-center z-50">
+                    <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg">
+                        <div className="flex justify-between items-center mb-4 border-b pb-3">
+                            <h2 className="text-xl font-bold text-gray-800">Tarih Seçin</h2>
+                            <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+                                <X className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        <div className="flex justify-between items-center mb-4">
+                            <button onClick={() => changeMonth(-1)} className="p-2 rounded-full hover:bg-gray-100">
+                                <ChevronLeft className="w-5 h-5 text-purple-600" />
+                            </button>
+                            <h3 className="text-lg font-bold text-gray-800">{months[currentMonth]} {currentYear}</h3>
+                            <button onClick={() => changeMonth(1)} className="p-2 rounded-full hover:bg-gray-100">
+                                <ChevronRight className="w-5 h-5 text-purple-600" />
+                            </button>
+                        </div>
+
+                        {/* GÜN İSİMLERİ: Pzt, Sal, Çar, Per, Cum, Cmt, Paz */}
+                        <div className="grid grid-cols-7 text-center text-sm font-semibold mb-2">
+                            {weekDayNames.map(day => <div key={day} className="text-gray-600 py-2">{day}</div>)}
+                        </div>
+
+                        <div className="grid grid-cols-7 gap-1">
+                            {monthData.map((day, index) => {
+                                const dateString = day ? day.dateString : null;
+                                const holidayName = dateString ? isHoliday(dateString) : null;
+                                const isSatSun = dateString ? isWeekend(dateString) : false;
+                                
+                                const baseStyles = 'h-10 flex flex-col justify-center items-center rounded-lg cursor-pointer transition-colors';
+                                let dayStyles = '';
+                                let taskCountBg = 'bg-purple-600 text-white';
+
+                                if (!day) {
+                                    dayStyles = 'bg-gray-50';
+                                } else if (isSelected(dateString)) {
+                                    dayStyles = 'bg-blue-600 text-white shadow-md ring-2 ring-blue-800'; // Seçili tarih
+                                    taskCountBg = 'bg-white text-blue-600';
+                                } else if (isToday(day)) {
+                                    dayStyles = 'bg-purple-600 text-white shadow-xl'; 
+                                    taskCountBg = 'bg-white text-purple-600';
+                                } else if (holidayName) {
+                                    dayStyles = 'bg-green-400 text-white hover:bg-green-500'; 
+                                    taskCountBg = 'bg-white text-green-600';
+                                } else if (isSatSun) {
+                                    dayStyles = 'bg-yellow-200 hover:bg-yellow-300'; 
+                                    taskCountBg = 'bg-purple-600 text-white';
+                                } else if (day.count > 0) {
+                                    dayStyles = 'bg-red-100 hover:bg-purple-100'; 
+                                    taskCountBg = 'bg-purple-600 text-white';
+                                } else {
+                                    dayStyles = 'hover:bg-purple-100'; 
+                                    taskCountBg = 'bg-purple-600 text-white';
+                                }
+
+                                const textStyles = isSelected(dateString) || isToday(day) || holidayName ? 'text-white' : (isSatSun ? 'text-gray-900' : 'text-gray-800');
+
+                                return (
+                                    <div 
+                                        key={index} 
+                                        className={`${baseStyles} ${dayStyles}`}
+                                        onClick={() => day && onSelectDate(day.dateString)}
+                                        title={holidayName || (isSatSun ? 'Hafta Sonu' : '')} 
+                                    >
+                                        {day ? (
+                                            <>
+                                                <span className={`text-sm font-bold ${textStyles}`}>
+                                                    {day.day}
+                                                </span>
+                                                {day.count > 0 && (
+                                                    <span className={`text-[10px] font-semibold mt-0.5 px-1.5 rounded-full ${taskCountBg} leading-none`}>
+                                                        {day.count}
+                                                    </span>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <span className="text-gray-400">-</span>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        <div className="mt-4 text-center">
+                            <p className="text-sm text-gray-600">
+                                <span className="text-blue-600 font-bold">{selectedDate ? selectedDate : 'Henüz tarih seçilmedi'}</span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+
+        // ====================================================================
+        // MEVCUT GÖRÜNÜMLER (GÜNCELLENMİŞ)
+        // ====================================================================
+
+        const WeeklyView = ({ tasks, dayNames, onEdit, holidays2026, isWeekend, isHoliday, onTaskHover, onTaskLeave }) => {
+            // 1. HAFTANIN BAŞLANGIÇ TARİHİNİ YÖNETMEK İÇİN STATE
+            const [startOfWeek, setStartOfWeek] = useState(() => {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                // Pazartesi'yi bul
+                // getDay() 0: Pazar, 1: Pazartesi, ..., 6: Cumartesi
+                let day = today.getDay();
+                // 0 (Pazar) -> 6, 1 (Pazartesi) -> 0, ..., 6 (Cumartesi) -> 5
+                let startDayOffset = (day === 0) ? -6 : -(day - 1); 
+                
+                const monday = new Date(today);
+                monday.setDate(today.getDate() + startDayOffset);
+                return monday;
+            });
+            
+            // 2. HAFTA DEĞİŞTİRME FONKSİYONU
+            const changeWeek = (delta) => {
+                setStartOfWeek(prevDate => {
+                    const newDate = new Date(prevDate);
+                    // Delta * 7 gün ekle/çıkar
+                    newDate.setDate(prevDate.getDate() + delta * 7);
+                    return newDate;
+                });
+            };
+            
+            const weeklyTasks = useMemo(() => {
+                const days = [];
+                
+                for (let i = 0; i < 7; i++) {
+                    const date = new Date(startOfWeek);
+                    date.setDate(startOfWeek.getDate() + i);
+                    
+                    const dateString = getDateString(date); 
+                    
+                    days.push({
+                        date: date,
+                        dateString: dateString,
+                        // Gün adını güncel isimlendirme ile al
+                        dayName: dayNames[date.getDay()],
+                        tasks: tasks.filter(t => t.date === dateString)
+                    });
+                }
+                return days;
+            }, [tasks, startOfWeek, dayNames]);
+
+            const todayString = useMemo(() => {
+                const now = new Date();
+                now.setHours(0, 0, 0, 0); 
+                return getDateString(now);
+            }, []);
+
+            // Hafta aralığını gösteren başlık
+            const weekRange = useMemo(() => {
+                const start = weeklyTasks[0].date.toLocaleDateString('tr-TR', { day: '2-digit', month: 'short' });
+                const end = weeklyTasks[6].date.toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' });
+                return `${start} - ${end}`;
+            }, [weeklyTasks]);
+
+
+            return (
+                <div className="flex flex-col">
+                    
+                    {/* YENİ: HAFTA GEÇİŞ KONTROLLERİ */}
+                    <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-lg mb-4">
+                        <button 
+                            onClick={() => changeWeek(-1)}
+                            className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+                            title="Önceki Hafta"
+                        >
+                            <ChevronLeft className="w-6 h-6 text-purple-600" />
+                        </button>
+                        
+                        <h2 className="text-xl font-bold text-gray-800 text-center">
+                            Haftalık Görünüm: <span className="text-purple-600">{weekRange}</span>
+                        </h2>
+                        
+                        <button 
+                            onClick={() => changeWeek(1)}
+                            className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+                            title="Sonraki Hafta"
+                        >
+                            <ChevronRight className="w-6 h-6 text-purple-600" />
+                        </button>
+                    </div>
+                    {/* HAFTA GEÇİŞ KONTROLLERİ BİTİŞ */}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-4">
+                        {weeklyTasks.map(day => {
+                            const dateString = day.dateString;
+                            const isCurrentDay = dateString === todayString;
+                            const holidayName = isHoliday(dateString); 
+                            const isSatSun = isWeekend(dateString); 
+
+                            let dayStyles = 'border-gray-200 bg-white';
+                            
+                            if (isCurrentDay) {
+                                dayStyles = 'border-purple-500 bg-purple-50 ring-2 ring-purple-300'; // Bugün vurgusu eklendi
+                            } else if (holidayName) {
+                                dayStyles = 'border-green-500 bg-green-100'; 
+                            } else if (isSatSun) {
+                                dayStyles = 'border-yellow-500 bg-yellow-50'; 
+                            } else {
+                                dayStyles = 'border-gray-200 bg-white';
+                            }
+
+                            return (
+                                <div 
+                                    key={day.dateString} 
+                                    className={`p-3 rounded-xl shadow-lg border-2 ${dayStyles}`}
+                                >
+                                    <h3 className="text-lg font-bold mb-3 text-center">
+                                        {day.dayName} 
+                                        <span className={`block text-xs font-normal ${isCurrentDay ? 'text-purple-700' : 'text-gray-500'}`}>
+                                            {day.date.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                        </span>
+                                        {/* Tatil Açıklaması */}
+                                        {holidayName && (
+                                            <span className="block text-sm font-bold text-green-600 mt-1">
+                                                🚨 {holidayName}
+                                            </span>
+                                        )}
+                                    </h3>
+                                    <div 
+                                        className="h-48 overflow-y-auto space-y-2"
+                                        // Takvime kolay ekleme için tıklanabilir alan
+                                        onClick={() => onEdit({ date: day.dateString })}
+                                        title="Bu güne görev eklemek için tıklayın"
+                                    >
+                                        {day.tasks.length === 0 ? (
+                                            <p className="text-sm text-gray-400 text-center mt-8 cursor-pointer hover:text-purple-400">Görevin yok. Eklemek için tıkla!</p>
+                                        ) : (
+                                            day.tasks.map(task => (
+                                                <TaskCard 
+                                                    key={task.id} 
+                                                    task={task} 
+                                                    onEdit={onEdit}
+                                                    onMouseEnter={onTaskHover}
+                                                    onMouseLeave={onTaskLeave}
+                                                />
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            );
+        };
+        
+        const MonthlyView = ({ tasks, months, dayNames, onEdit, holidays2026, isWeekend, isHoliday }) => {
+            const now = new Date();
+            const [currentMonth, setCurrentMonth] = useState(now.getMonth());
+            const [currentYear, setCurrentYear] = useState(now.getFullYear()); 
+
+            const monthData = useMemo(() => {
+                const firstDayOfMonth = new Date(currentYear, currentMonth, 1);
+                // getDay() 0: Pazar, 1: Pazartesi, ..., 6: Cumartesi
+                let startDay = firstDayOfMonth.getDay(); 
+                
+                // HAFTA BAŞLANGICI DÜZELTME: Pazartesi (1) 0 olmalı.
+                // 0 (Pazar) -> 6, 1 (Pazartesi) -> 0, ..., 6 (Cumartesi) -> 5
+                startDay = (startDay === 0) ? 6 : startDay - 1;
+
+                const lastDayOfMonth = new Date(currentYear, currentMonth + 1, 0);
+                const daysInMonth = lastDayOfMonth.getDate();
+                
+                const taskCounts = tasks.reduce((acc, task) => {
+                    const taskDate = parseDateLocal(task.date); 
+                    if (taskDate && taskDate.getMonth() === currentMonth && taskDate.getFullYear() === currentYear) {
+                        const day = taskDate.getDate(); 
+                        acc[day] = (acc[day] || 0) + 1;
+                    }
+                    return acc;
+                }, {});
+
+                const calendarDays = [];
+                // Önceki aydan boşluklar
+                const offset = startDay; 
+                for (let i = 0; i < offset; i++) {
+                    calendarDays.push(null);
+                }
+                
+                for (let i = 1; i <= daysInMonth; i++) {
+                    const dateString = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+                    calendarDays.push({
+                        day: i,
+                        count: taskCounts[i] || 0,
+                        dateString: dateString
+                    });
+                }
+                return calendarDays;
+            }, [tasks, currentMonth, currentYear]);
+
+            const changeMonth = (delta) => {
+                let newMonth = currentMonth + delta;
+                let newYear = currentYear;
+                if (newMonth < 0) {
+                    newMonth = 11;
+                    newYear = currentYear - 1;
+                } else if (newMonth > 11) {
+                    newMonth = 0;
+                    newYear = currentYear + 1;
+                }
+                setCurrentMonth(newMonth);
+                setCurrentYear(newYear);
+            };
+
+            const isToday = (day) => {
+                const today = new Date();
+                return day && day.day === today.getDate() && currentMonth === today.getMonth() && currentYear === today.getFullYear();
+            };
+            
+            // Gün isimleri dizisinin Pazartesi'den başlayanı
+            const weekDayNames = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
+
+
+            return (
+                <div className="bg-white p-4 rounded-xl shadow-lg">
+                    <div className="flex justify-between items-center mb-4">
+                        <button onClick={() => changeMonth(-1)} className="p-2 rounded-full hover:bg-gray-100">
+                            <ChevronLeft className="w-5 h-5 text-purple-600" />
+                        </button>
+                        <h2 className="text-xl font-bold text-gray-800">{months[currentMonth]} {currentYear}</h2>
+                        <button onClick={() => changeMonth(1)} className="p-2 rounded-full hover:bg-gray-100">
+                            <ChevronRight className="w-5 h-5 text-purple-600" />
+                        </button>
+                    </div>
+
+                    {/* GÜN İSİMLERİ: Pzt, Sal, Çar, Per, Cum, Cmt, Paz */}
+                    <div className="grid grid-cols-7 text-center text-sm font-semibold mb-2">
+                        {weekDayNames.map(day => <div key={day} className="text-gray-600 py-2">{day}</div>)}
+                    </div>
+
+                    <div className="grid grid-cols-7 gap-1">
+                        {monthData.map((day, index) => {
+                            const dateString = day ? day.dateString : null;
+                            const holidayName = dateString ? isHoliday(dateString) : null;
+                            const isSatSun = dateString ? isWeekend(dateString) : false;
+                            
+                            const baseStyles = 'h-16 flex flex-col justify-center items-center rounded-lg cursor-pointer transition-colors';
+                            let dayStyles = '';
+                            let taskCountBg = 'bg-purple-600 text-white'; 
+
+                            if (!day) {
+                                dayStyles = 'bg-gray-50'; 
+                            } else if (isToday(day)) {
+                                dayStyles = 'bg-purple-600 text-white shadow-xl'; 
+                                taskCountBg = 'bg-white text-purple-600';
+                            } else if (holidayName) {
+                                dayStyles = 'bg-green-400 text-white hover:bg-green-500'; 
+                                taskCountBg = 'bg-white text-green-600';
+                            } else if (isSatSun) {
+                                dayStyles = 'bg-yellow-200 hover:bg-yellow-300'; 
+                                taskCountBg = 'bg-purple-600 text-white';
+                            } else if (day.count > 0) {
+                                dayStyles = 'bg-red-100 hover:bg-purple-100'; 
+                                taskCountBg = 'bg-purple-600 text-white';
+                            } else {
+                                dayStyles = 'hover:bg-purple-100'; 
+                                taskCountBg = 'bg-purple-600 text-white';
+                            }
+
+                            const textStyles = isToday(day) || holidayName ? 'text-white' : (isSatSun ? 'text-gray-900' : 'text-gray-800');
+
+                            return (
+                                <div 
+                                    key={index} 
+                                    className={`${baseStyles} ${dayStyles}`}
+                                    onClick={() => day && onEdit({ date: day.dateString })}
+                                    title={holidayName || (isSatSun ? 'Hafta Sonu' : '')} 
+                                >
+                                    {day ? (
+                                        <>
+                                            <span className={`text-lg font-bold ${textStyles}`}>
+                                                {day.day}
+                                            </span>
+                                            {day.count > 0 && (
+                                                <span className={`text-xs font-semibold mt-0.5 px-2 rounded-full ${taskCountBg}`}>
+                                                    {day.count}
+                                                </span>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <span className="text-gray-400">-</span>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            );
+        };
+
+        // ====================================================================
+        // ANA BİLEŞEN
+        // ====================================================================
+
+        const Planner2026 = () => {
+            const [tasks, setTasks] = useState([]);
+            const [filterMonth, setFilterMonth] = useState('all');
+            const [filterCategory, setFilterCategory] = useState('all');
+            const [showAddForm, setShowAddForm] = useState(false);
+            const [editingId, setEditingId] = useState(null);
+            const [viewMode, setViewMode] = useState('weekly'); 
+            const [showDatePicker, setShowDatePicker] = useState(false); 
+            
+            // YENİ TOOLTIP STATE'LERİ
+            const [hoveredTask, setHoveredTask] = useState(null);
+            const [hoverRect, setHoverRect] = useState(null);
+
+            const handleTaskHover = (task, rect) => {
+                setHoveredTask(task);
+                setHoverRect(rect);
+            };
+
+            const handleTaskLeave = () => {
+                setHoveredTask(null);
+                setHoverRect(null);
+            };
+
+
+            const [newTask, setNewTask] = useState({
+                date: '',
+                task: '',
+                // Diğer alanlar kaldırıldı
+            });
+
+            // 2026 Türkiye Resmi Tatilleri (YYYY güncellenmiştir)
+            const holidays2026 = {
+                '2026-01-01': 'Yılbaşı',
+                '2026-03-19': 'Ramazan Bayramı Arifesi',
+                '2026-03-20': 'Ramazan Bayramı 1.gün',
+                '2026-03-21': 'Ramazan Bayramı 2.gün',
+                '2026-03-22': 'Ramazan Bayramı 3.gün',
+                '2026-04-23': 'Ulusal Egemenlik ve Çocuk Bayramı',
+                '2026-05-01': 'Emek ve Dayanışma Günü',
+                '2026-05-19': 'Atatürk\'ü Anma, Gençlik ve Spor Bayramı',
+                '2026-05-26': 'Kurban Bayramı Arifesi',
+                '2026-05-27': 'Kurban Bayramı 1.gün',
+                '2026-05-28': 'Kurban Bayramı 2.gün',
+                '2026-05-29': 'Kurban Bayramı 3.gün',
+                '2026-05-30': 'Kurban Bayramı 4.gün',
+                '2026-07-15': 'Demokrasi ve Millî Birlik Günü',
+                '2026-08-30': 'Zafer Bayramı',
+                '2026-10-28': 'Cumhuriyet Bayramı Arifesi',
+                '2026-10-29': 'Cumhuriyet Bayramı',
+                '2026-12-31': 'Yılbaşı gecesi'
+            };
+
+            const isWeekend = (dateString) => {
+                const date = parseDateLocal(dateString);
+                const day = date.getDay();
+                return day === 0 || day === 6; // Pazar veya Cumartesi
+            };
+
+            const isHoliday = (dateString) => {
+                return holidays2026[dateString]; // Tatil adını döndürür veya undefined
+            };
+
+            // LocalStorage'dan veri yükle
+            useEffect(() => {
+                const savedTasks = localStorage.getItem('planner2026_tasks');
+                if (savedTasks) {
+                    setTasks(JSON.parse(savedTasks));
+                }
+            }, []);
+
+            // LocalStorage'a veri kaydet
+            useEffect(() => {
+                localStorage.setItem('planner2026_tasks', JSON.stringify(tasks));
+            }, [tasks]);
+
+            // Sabit veriler
+            const months = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+            
+            // DÜZELTİLMİŞ GÜN İSİMLERİ: Pazar'dan başlayıp kısaltma yapıldı
+            const dayNames = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
+            
+            // Kullanılmayan kategoriler ve öncelikler silindi
+            // const categories = ['İş', 'Kişisel', 'Sağlık', 'Eğitim', 'Alışveriş', 'Sosyal', 'Finans', 'Diğer'];
+            // const priorities = ['Düşük', 'Orta', 'Yüksek', 'Acil'];
+            // const statuses = ['Bekliyor', 'Devam Ediyor', 'Tamamlandı', 'İptal'];
+
+            const getDayName = (dateString) => {
+                const date = parseDateLocal(dateString); 
+                return date ? dayNames[date.getDay()] : '-';
+            };
+            
+            const handleDateSelect = (dateString) => {
+                setNewTask({ ...newTask, date: dateString });
+                setShowDatePicker(false);
+            };
+
+            const handleAddTask = () => {
+                if (newTask.date && newTask.task) {
+                    // Yeni görevler için varsayılan değerleri atıyoruz
+                    const taskWithDefaults = {
+                        ...newTask,
+                        time: '', 
+                        category: 'Diğer', 
+                        priority: 'Orta', 
+                        status: 'Bekliyor' 
+                    };
+
+                    if (editingId) {
+                        setTasks(tasks.map(t => t.id === editingId ? { ...t, ...taskWithDefaults, id: editingId } : t));
+                        setEditingId(null);
+                    } else {
+                        setTasks([...tasks, { ...taskWithDefaults, id: Date.now() }]);
+                    }
+                    setNewTask({ date: '', task: '' });
+                    setShowAddForm(false);
+                }
+            };
+
+            const handleEdit = (task) => {
+                // Düzenlerken formda sadece tarih ve görev görünecek
+                setNewTask({ date: task.date, task: task.task });
+                setEditingId(task.id);
+                setShowAddForm(true);
+                handleTaskLeave(); 
+            };
+            
+            const handleDashboardAction = (data) => {
+                if (data.date) {
+                     setNewTask({ date: data.date, task: '' });
+                     setShowAddForm(true);
+                     setEditingId(null);
+                } else if (data.id) {
+                    handleEdit(data);
+                }
+            };
+
+            const handleDelete = (id) => {
+                if (confirm('Bu görevi silmek istediğinizden emin misiniz?')) {
+                    setTasks(tasks.filter(t => t.id !== id));
+                    handleTaskLeave(); 
+                }
+            };
+
+            const handleCancel = () => {
+                setNewTask({ date: '', task: '' });
+                setEditingId(null);
+                setShowAddForm(false);
+            };
+
+            const filteredTasks = useMemo(() => {
+                return tasks.filter(task => {
+                    const taskDate = parseDateLocal(task.date);
+                    if (!taskDate) return false;
+                    
+                    const taskMonth = taskDate.getMonth();
+                    
+                    const monthMatch = filterMonth === 'all' || taskMonth === parseInt(filterMonth);
+                    const categoryMatch = true; 
+                    
+                    return monthMatch && categoryMatch;
+                }).sort((a, b) => {
+                    const dateA = parseDateLocal(a.date);
+                    const dateB = parseDateLocal(b.date);
+                    const dateCompare = dateA - dateB;
+
+                    if (dateCompare !== 0) return dateCompare;
+                    
+                    const timeA = a.time || '00:00';
+                    const timeB = b.time || '00:00';
+                    return timeA.localeCompare(timeB);
+                });
+            }, [tasks, filterMonth]);
+
+            const exportToExcel = () => { 
+                let excelContent = `<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"> <Styles>  <Style ss:ID="header">   <Font ss:Bold="1" ss:Color="#FFFFFF"/>   <Interior ss:Color="#4F46E5" ss:Pattern="Solid"/>   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>  </Style> </Styles> <Worksheet ss:Name="Planlayıcı">  <Table>   <Column ss:Width="100"/>   <Column ss:Width="80"/>   <Column ss:Width="250"/>   <Row ss:StyleID="header">    <Cell><Data ss:Type="String">Tarih</Data></Cell>    <Cell><Data ss:Type="String">Gün</Data></Cell>    <Cell><Data ss:Type="String">Görev</Data></Cell>   </Row>`;
+
+                filteredTasks.forEach(task => {
+                    excelContent += `   <Row>    <Cell><Data ss:Type="String">${parseDateLocal(task.date).toLocaleDateString('tr-TR')}</Data></Cell>    <Cell><Data ss:Type="String">${getDayName(task.date)}</Data></Cell>    <Cell><Data ss:Type="String">${task.task.replace(/[<>&"']/g, '')}</Data></Cell>   </Row>`;
+                });
+
+                excelContent += `  </Table> </Worksheet></Workbook>`;
+
+                const blob = new Blob([excelContent], { type: 'application/vnd.ms-excel' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'planlayici.xls';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+            };
+
+            const stats = useMemo(() => {
+                const total = filteredTasks.length;
+                return { total, completed: 0, pending: total, inProgress: 0 };
+            }, [filteredTasks]);
+
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 p-4">
+                    <div className="max-w-7xl mx-auto">
+                        <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-3">
+                                    <Calendar className="w-8 h-8 text-purple-600" />
+                                    <div>
+                                        <h1 className="text-3xl font-bold text-gray-800">Yıllık Planlayıcı</h1> 
+                                        <p className="text-sm text-gray-600">Hedeflerinizi planlayın ve takip edin</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setShowAddForm(!showAddForm)}
+                                    className="flex items-center gap-2 bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors shadow-md"
+                                >
+                                    <Plus className="w-5 h-5" />
+                                    Yeni Görev
+                                </button>
+                            </div>
+
+                            {/* İstatistikler (Basitleştirilmiş) */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+                                <div className="bg-gradient-to-br from-blue-100 to-blue-200 p-4 rounded-xl">
+                                    <p className="text-sm text-blue-700 font-semibold">Toplam Görev</p>
+                                    <p className="text-2xl font-bold text-blue-900">{stats.total}</p>
+                                </div>
+                                <div className="bg-gradient-to-br from-green-100 to-green-200 p-4 rounded-xl">
+                                    <p className="text-sm text-green-700 font-semibold">Tamamlandı</p>
+                                    <p className="text-2xl font-bold text-green-900">0</p>
+                                </div>
+                                <div className="bg-gradient-to-br from-gray-100 to-gray-200 p-4 rounded-xl">
+                                    <p className="text-sm text-gray-700 font-semibold">Bekliyor</p>
+                                    <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+                                </div>
+                                <div className="bg-gradient-to-br from-yellow-100 to-yellow-200 p-4 rounded-xl">
+                                    <p className="text-sm text-yellow-700 font-semibold">Devam Ediyor</p>
+                                    <p className="text-2xl font-bold text-yellow-900">0</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {showAddForm && (
+                            <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
+                                <h2 className="text-xl font-bold text-gray-800 mb-4">
+                                    {editingId ? 'Görevi Düzenle' : 'Yeni Görev Ekle'}
+                                </h2>
+                                {/* GÖREV EKLEME FORMU (SADECE TARİH VE GÖREV) */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {/* 1. Tarih */}
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">Tarih *</label>
+                                        <div className="relative">
+                                            <input
+                                                type="date"
+                                                value={newTask.date}
+                                                className="hidden" 
+                                                readOnly 
+                                            />
+                                            <div className="flex items-center space-x-2 w-full">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowDatePicker(true)}
+                                                    className="flex items-center gap-2 bg-purple-100 text-purple-700 px-4 py-2 border-2 border-purple-300 rounded-lg hover:bg-purple-200 transition-colors"
+                                                >
+                                                    <CalendarPlus className="w-5 h-5" />
+                                                    Tarih Seç
+                                                </button>
+                                                <span className={`text-sm font-medium ${newTask.date ? 'text-gray-900' : 'text-gray-500 italic'}`}>
+                                                    {newTask.date ? parseDateLocal(newTask.date).toLocaleDateString('tr-TR') : 'Tarih Seçilmedi'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        {newTask.date && (
+                                            <p className="text-sm text-purple-600 font-semibold mt-1">
+                                                {getDayName(newTask.date)}
+                                            </p>
+                                        )}
+                                    </div>
+                                    
+                                    {/* 2. Görev Açıklaması */}
+                                    <div className="col-span-1 md:col-span-2">
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">Görev *</label>
+                                        <input
+                                            type="text"
+                                            value={newTask.task}
+                                            onChange={(e) => setNewTask({ ...newTask, task: e.target.value })}
+                                            placeholder="Görev açıklaması..."
+                                            className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex gap-3 mt-4">
+                                    <button
+                                        onClick={handleAddTask}
+                                        className="flex items-center gap-2 bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors"
+                                    >
+                                        <Check className="w-4 h-4" />
+                                        {editingId ? 'Güncelle' : 'Ekle'}
+                                    </button>
+                                    <button
+                                        onClick={handleCancel}
+                                        className="flex items-center gap-2 bg-gray-400 text-white px-6 py-2 rounded-lg hover:bg-gray-500 transition-colors"
+                                    >
+                                        <X className="w-4 h-4" />
+                                        İptal
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* DATE PICKER MODAL GÖSTERİMİ */}
+                        {showDatePicker && (
+                            <DatePickerModal
+                                selectedDate={newTask.date}
+                                tasks={tasks} 
+                                onSelectDate={handleDateSelect}
+                                onClose={() => setShowDatePicker(false)}
+                                months={months}
+                                dayNames={dayNames}
+                                isWeekend={isWeekend}
+                                isHoliday={isHoliday}
+                            />
+                        )}
+                        
+                        {/* GÖRÜNÜM SEÇİMİ */}
+                        <div className="bg-white rounded-2xl shadow-lg p-4 mb-6 flex justify-between items-center">
+                            <h2 className="text-xl font-bold text-gray-800">Planlama Görünümü</h2>
+                            <div className="flex gap-2 p-1 bg-gray-100 rounded-lg">
+                                <button
+                                    onClick={() => setViewMode('weekly')}
+                                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2 ${viewMode === 'weekly' ? 'bg-purple-600 text-white shadow-md' : 'text-gray-600 hover:bg-white'}`}
+                                >
+                                    <List className="w-5 h-5" /> Haftalık
+                                </button>
+                                <button
+                                    onClick={() => setViewMode('monthly')}
+                                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2 ${viewMode === 'monthly' ? 'bg-purple-600 text-white shadow-md' : 'text-gray-600 hover:bg-white'}`}
+                                >
+                                    <Calendar className="w-5 h-5" /> Aylık
+                                </button>
+                                <button
+                                    onClick={() => setViewMode('table')}
+                                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2 ${viewMode === 'table' ? 'bg-purple-600 text-white shadow-md' : 'text-gray-600 hover:bg-white'}`}
+                                >
+                                    <Table className="w-5 h-5" /> Liste
+                                </button>
+                            </div>
+                        </div>
+                        
+                        {/* GÖRÜNÜM ALANI */}
+                        {viewMode === 'weekly' && (
+                            <div className="mb-6">
+                                <WeeklyView 
+                                    tasks={tasks} 
+                                    dayNames={dayNames} 
+                                    onEdit={handleDashboardAction} 
+                                    holidays2026={holidays2026}
+                                    isWeekend={isWeekend}
+                                    isHoliday={isHoliday}
+                                    onTaskHover={handleTaskHover} 
+                                    onTaskLeave={handleTaskLeave} 
+                                />
+                            </div>
+                        )}
+                        
+                        {viewMode === 'monthly' && (
+                            <div className="mb-6">
+                                <MonthlyView 
+                                    tasks={tasks} 
+                                    months={months} 
+                                    dayNames={dayNames} 
+                                    onEdit={handleDashboardAction} 
+                                    holidays2026={holidays2026}
+                                    isWeekend={isWeekend}
+                                    isHoliday={isHoliday}
+                                />
+                            </div>
+                        )}
+
+
+                        {/* FİLTRE VE TABLO GÖRÜNÜMÜ */}
+                        {viewMode === 'table' && (
+                            <>
+                                <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <Filter className="w-5 h-5 text-purple-600" />
+                                        <h2 className="text-lg font-bold text-gray-800">Filtreler</h2>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">Ay</label>
+                                            <select
+                                                value={filterMonth}
+                                                onChange={(e) => setFilterMonth(e.target.value)}
+                                                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none"
+                                            >
+                                                <option value="all">Tüm Aylar</option>
+                                                {months.map((month, idx) => (
+                                                    <option key={idx} value={idx}>{month}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="flex items-end col-span-1 md:col-span-2">
+                                            <button
+                                                onClick={exportToExcel}
+                                                disabled={filteredTasks.length === 0}
+                                                className="w-full flex items-center justify-center gap-2 bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                                            >
+                                                <Download className="w-4 h-4" />
+                                                Excel'e Aktar (.xls)
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full">
+                                            <thead className="bg-gradient-to-r from-purple-600 to-blue-600 text-white">
+                                                <tr>
+                                                    <th className="px-6 py-4 text-left text-sm font-bold">Tarih</th>
+                                                    <th className="px-6 py-4 text-left text-sm font-bold">Gün</th>
+                                                    <th className="px-6 py-4 text-left text-sm font-bold">Görev</th>
+                                                    <th className="px-6 py-4 text-center text-sm font-bold">İşlemler</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {filteredTasks.length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan="4" className="px-6 py-12 text-center text-gray-500">
+                                                            <Calendar className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                                                            <p className="text-lg font-semibold">Henüz görev eklenmedi</p>
+                                                            <p className="text-sm">Yeni görev eklemek için yukarıdaki butonu kullanın</p>
+                                                        </td>
+                                                    </tr>
+                                                ) : (
+                                                    filteredTasks.map((task, idx) => (
+                                                        <tr key={task.id} className={idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                                                            <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                                                                {parseDateLocal(task.date).toLocaleDateString('tr-TR')}
+                                                            </td>
+                                                            <td className="px-6 py-4 text-sm font-semibold text-purple-600">
+                                                                {getDayName(task.date)}
+                                                            </td>
+                                                            <td className="px-6 py-4 text-sm text-gray-900">{task.task}</td>
+                                                            
+                                                            <td className="px-6 py-4">
+                                                                <div className="flex items-center justify-center gap-2">
+                                                                    <button
+                                                                        onClick={() => handleEdit(task)}
+                                                                        className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
+                                                                        title="Düzenle"
+                                                                    >
+                                                                        <Edit2 className="w-4 h-4" />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleDelete(task.id)}
+                                                                        className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                                                                        title="Sil"
+                                                                    >
+                                                                        <Trash2 className="w-4 h-4" />
+                                                                    </button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    ))
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                        
+
+                        <div className="mt-6 text-center text-sm text-gray-600">
+                            <p>💡 İpucu: Verileriniz tarayıcınızda LocalStorage'da güvenle saklanıyor. Excel'e aktararak yedek alabilirsiniz.</p>
+                        </div>
+                    </div>
+
+                    {/* GLOBAL TOOLTIP'İ EN SONDA RENDER ET */}
+                    <GlobalTooltip task={hoveredTask} rect={hoverRect} />
+                </div>
+            );
+        };
+
+        ReactDOM.render(<Planner2026 />, document.getElementById('root'));
+    </script>
+</body>
+</html>
